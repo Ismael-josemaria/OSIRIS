@@ -52,7 +52,9 @@ async function buscarYAñadir() {
             power: data.power || null,
             toughness: data.toughness || null,
             set_name: data.set_name || data.set.name,
-            rarity: data.rarity || "common"
+            rarity: data.rarity || "common",
+            legalities: data.legalities || {},
+            color_identity: data.color_identity || []
         };
 
         const existente = coleccion.find(c => c.id === nuevaCarta.id);
@@ -341,6 +343,7 @@ function renderizarMazo() {
     
     // Commander Validator
     let isSingleton = true;
+    let illegalCards = [];
     const basicLands = ["plains", "island", "swamp", "mountain", "forest", "wastes", "snow-covered plains", "snow-covered island", "snow-covered swamp", "snow-covered mountain", "snow-covered forest"];
     
     Object.keys(mazoAgrupado).forEach(id => {
@@ -348,21 +351,25 @@ function renderizarMazo() {
         const c = coleccion.find(item => item.id === id);
         if (c) {
             const isBasic = basicLands.includes(c.nombre.toLowerCase());
-            if (qty > 1 && !isBasic) {
+            if (qty > 1 && !isBasic && (!c.oracle_text || !c.oracle_text.toLowerCase().includes("any number of cards named"))) {
                 isSingleton = false;
+            }
+            if (c.legalities && (c.legalities.commander === "banned" || c.legalities.commander === "not_legal")) {
+                illegalCards.push(c.nombre);
             }
         }
     });
 
     const validatorDiv = document.getElementById('commanderValidator');
     if (validatorDiv) {
-        if (mazoIds.length === 100 && isSingleton) {
+        if (mazoIds.length === 100 && isSingleton && illegalCards.length === 0) {
             validatorDiv.innerHTML = `<div class="validator-badge valid"><i class="ph-bold ph-shield-check"></i> Formato Commander: Legal</div>`;
         } else {
             let reason = "";
             if (mazoIds.length !== 100) reason += `${mazoIds.length}/100 cartas. `;
-            if (!isSingleton) reason += `Incumple regla Singleton.`;
-            validatorDiv.innerHTML = `<div class="validator-badge invalid"><i class="ph-bold ph-warning"></i> Commander: ${reason}</div>`;
+            if (!isSingleton) reason += `Regla Singleton vulnerada. `;
+            if (illegalCards.length > 0) reason += `Cartas Ilegales/Baneadas (${illegalCards.length}). `;
+            validatorDiv.innerHTML = `<div class="validator-badge invalid"><i class="ph-bold ph-warning"></i> Commander: ${reason.trim()}</div>`;
         }
     }
     
@@ -687,7 +694,9 @@ async function procesarImportacionMasiva() {
                 power: data.power || null,
                 toughness: data.toughness || null,
                 set_name: data.set_name || data.set.name,
-                rarity: data.rarity || "common"
+                rarity: data.rarity || "common",
+                legalities: data.legalities || {},
+                color_identity: data.color_identity || []
             };
 
             const existente = coleccion.find(c => c.id === nuevaCarta.id);
@@ -1323,6 +1332,86 @@ function copiarListaTrade() {
     navigator.clipboard.writeText(texto).then(() => {
         alert("Lista de cambios copiada al portapapeles.");
     });
+}
+
+// --- 19. EDHREC SINERGIAS ---
+async function abrirModalEDHREC() {
+    document.getElementById('edhrecModal').classList.add('active');
+    const grid = document.getElementById('edhrecGrid');
+    const status = document.getElementById('edhrecStatus');
+    grid.innerHTML = '';
+    status.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Analizando el mazo...';
+    
+    // Encontrar comandante
+    const mazoIds = mazos[mazoActivo];
+    let commanders = [];
+    mazoIds.forEach(id => {
+        const c = coleccion.find(item => item.id === id);
+        if (c && c.tipo.toLowerCase().includes('legendary') && (c.tipo.toLowerCase().includes('creature') || (c.oracle_text && c.oracle_text.toLowerCase().includes('can be your commander')))) {
+            commanders.push(c);
+        }
+    });
+
+    if (commanders.length === 0) {
+        status.innerHTML = 'No se encontró ninguna criatura legendaria en el mazo para usar como Comandante.';
+        return;
+    }
+
+    let commander = commanders.sort((a,b) => (b.cmc || 0) - (a.cmc || 0))[0];
+    status.innerHTML = `<i class="ph-bold ph-spinner ph-spin"></i> Conectando con EDHREC para: <b>${commander.nombre}</b>...`;
+
+    let slug = commander.nombre.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+    
+    try {
+        const response = await fetch(`https://edhrec-json.s3.amazonaws.com/en/commanders/${slug}.json`);
+        const data = await response.json();
+        
+        if (data.container && data.container.json_dict && data.container.json_dict.cardlists) {
+            status.innerHTML = `Recomendaciones Top para ${commander.nombre}:`;
+            let topCards = [];
+            data.container.json_dict.cardlists.forEach(list => {
+                if (list.header === "Top Cards" || list.header === "High Synergy Cards" || list.header === "New Cards") {
+                    topCards = topCards.concat(list.cardviews);
+                }
+            });
+            
+            let uniqueCards = Array.from(new Set(topCards.map(c => c.name))).map(name => topCards.find(c => c.name === name)).slice(0, 30);
+            
+            uniqueCards.forEach((card) => {
+                const div = document.createElement('div');
+                div.style.position = 'relative';
+                div.style.minHeight = '210px';
+                div.className = 'carta';
+                div.innerHTML = `<img src="https://via.placeholder.com/150x210?text=Cargando..." style="width:100%; border-radius:8px;">
+                                 <button class="btn-icon" style="position:absolute; bottom:5px; right:5px; background:rgba(0,0,0,0.8); border:1px solid var(--primary);" onclick="buscarYAñadirDesdeEDHREC('${card.name.replace(/'/g, "\\'")}')" title="Añadir a mi colección"><i class="ph-bold ph-plus"></i></button>`;
+                grid.appendChild(div);
+                
+                fetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(card.name)}`)
+                    .then(res => res.json())
+                    .then(scryData => {
+                        if (scryData.image_uris) {
+                            div.querySelector('img').src = scryData.image_uris.normal;
+                        } else if (scryData.card_faces && scryData.card_faces[0].image_uris) {
+                            div.querySelector('img').src = scryData.card_faces[0].image_uris.normal;
+                        }
+                    });
+            });
+        } else {
+            status.innerHTML = `No se encontraron datos en EDHREC para ${commander.nombre}.`;
+        }
+    } catch (e) {
+        status.innerHTML = `No se pudo conectar con EDHREC para ${commander.nombre}. Es posible que no sea un comandante válido o haya un error de red.`;
+    }
+}
+
+function cerrarModalEDHREC() {
+    document.getElementById('edhrecModal').classList.remove('active');
+}
+
+async function buscarYAñadirDesdeEDHREC(nombre) {
+    document.getElementById('nombreCartaInput').value = nombre;
+    buscarYAñadir();
+    alert(nombre + " añadido a tu colección. Lo podrás ver al cerrar este panel.");
 }
 
 // --- INICIO ---

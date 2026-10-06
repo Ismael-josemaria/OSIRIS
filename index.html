@@ -90,6 +90,7 @@
                         <span id="contadorCartasMazo" class="badge">0</span>
                     </div>
                     <div style="display:flex; gap:0.2rem;">
+                        <button class="btn-icon" onclick="abrirModalEDHREC()" title="Sinergias EDHREC"><i class="ph-bold ph-lightning"></i></button>
                         <button class="btn-icon" onclick="abrirModalVidas()" title="Modo Partida (Contador Vidas)"><i class="ph-bold ph-heart"></i></button>
                         <button class="btn-icon" onclick="abrirModalProbabilidades()" title="Calculadora de Probabilidades"><i class="ph-bold ph-calculator"></i></button>
                         <button class="btn-icon" onclick="abrirModalMulligan()" title="Simulador de Mulligan"><i class="ph-bold ph-cards"></i></button>
@@ -420,6 +421,23 @@
                 <div id="boosterStatus" style="color:var(--accent); margin-bottom:1rem; min-height:20px;"></div>
                 <div id="boosterPacksGrid" style="display:flex; flex-wrap:wrap; justify-content:center; gap:1rem;">
                     <!-- Cartas del sobre aquí -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal EDHREC -->
+    <div id="edhrecModal" class="modal-overlay" onclick="cerrarModalEDHREC()">
+        <div class="modal-content glass-panel" style="max-width: 900px; max-height:80vh; display:flex; flex-direction:column;" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: 1.5rem 2rem; border-bottom: 1px solid var(--border-color);">
+                <h2 style="color:var(--primary); margin:0;"><i class="ph-bold ph-lightning"></i> EDHREC - Sugerencias</h2>
+                <button class="modal-close" style="position:static;" onclick="cerrarModalEDHREC()"><i class="ph-bold ph-x"></i></button>
+            </div>
+            <div class="modal-body" style="overflow-y:auto; flex:1;">
+                <p style="color:var(--text-muted); margin-bottom:1rem;">Buscando el mejor Comandante en tu mazo y obteniendo sinergias de la red EDHREC...</p>
+                <div id="edhrecStatus" style="color:var(--accent); font-weight:bold; margin-bottom:1rem; text-align:center;"></div>
+                <div id="edhrecGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:1rem;">
+                    <!-- Cartas EDHREC aquí -->
                 </div>
             </div>
         </div>
